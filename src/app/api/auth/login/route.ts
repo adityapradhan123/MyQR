@@ -1,11 +1,10 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { connectDB } from "@/lib/mongodb";
 import User from "@/models/User";
 import { createSession, COOKIE_NAME } from "@/lib/auth";
-
-
 
 const loginSchema = z.object({
   email: z.string().trim().email().max(254),
@@ -14,9 +13,21 @@ const loginSchema = z.object({
 
 export async function POST(request: NextRequest) {
   const origin = request.headers.get("origin");
-  const expected = process.env.APP_URL ?? new URL(request.url).origin;
 
-  if (origin !== expected) {
+  let expectedOrigin: string;
+
+  try {
+    expectedOrigin = process.env.APP_URL
+      ? new URL(process.env.APP_URL).origin
+      : new URL(request.url).origin;
+  } catch {
+    return NextResponse.json(
+      { message: "Server origin configuration is invalid." },
+      { status: 500 }
+    );
+  }
+
+  if (!origin || origin !== expectedOrigin) {
     return NextResponse.json(
       { message: "Invalid request origin" },
       { status: 403 }
@@ -40,7 +51,10 @@ export async function POST(request: NextRequest) {
     }).select("+passwordHash");
 
     const passwordMatches = user
-      ? await bcrypt.compare(parsed.data.password, user.passwordHash)
+      ? await bcrypt.compare(
+          parsed.data.password,
+          user.passwordHash
+        )
       : false;
 
     if (!user || !passwordMatches) {
